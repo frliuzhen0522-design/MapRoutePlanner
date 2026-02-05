@@ -8,13 +8,10 @@ import org.example.maprouteplanner.dto.RouteSegment;
 import org.example.maprouteplanner.mapper.PointMapper;
 import org.example.maprouteplanner.model.Point;
 import org.example.maprouteplanner.service.RoutePlanService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -26,18 +23,17 @@ import java.util.stream.Collectors;
 public class RoutePlanServiceImpl implements RoutePlanService {
 
     private final PointMapper pointMapper;
+    private final GaoDeApiService gaoDeApiService;
+    private static final Logger logger = LoggerFactory.getLogger(RoutePlanServiceImpl.class);
 
-    // ⚠️ 建议后面放到 application.yml，这里先写死方便测试
-    private static final String GAODE_WEB_KEY = "8cb054591f58e456f5ac66ff5d3a7e9d";
-    private static final String GAODE_SECURITY_KEY = "ab9fbe2812ffcce65129168e9cbb249f";
-
-    public RoutePlanServiceImpl(PointMapper pointMapper) {
+    public RoutePlanServiceImpl(PointMapper pointMapper, GaoDeApiService gaoDeApiService) {
         this.pointMapper = pointMapper;
+        this.gaoDeApiService = gaoDeApiService;
     }
 
     @Override
     public RoutePlanResponse plan(RoutePlanRequest request) {
-
+        // 从请求中组装起点 + 目标点的规划列表
         List<Point> points = new ArrayList<>();
 
         // 起点
@@ -58,26 +54,38 @@ public class RoutePlanServiceImpl implements RoutePlanService {
      * 核心路线计算（暂时按顺序）
      */
     public RoutePlanResponse planRoute(List<Point> points) {
+        RoutePlanResponse response = new RoutePlanResponse();
+        // 空输入直接返回，避免空指针或越界
+        if (points == null || points.size() < 2) {
+            response.setVisitOrder(List.of());
+            response.setRoutes(List.of());
+            response.setTotalDistance(0);
+            return response;
+        }
 
         List<RouteSegment> segments = new ArrayList<>();
+        int totalDistance = 0; // 累计总距离（米）
 
         for (int i = 0; i < points.size() - 1; i++) {
             Point from = points.get(i);
             Point to = points.get(i + 1);
 
+            // 调用高德 API 获取路线信息
             String json = callGaoDeApi(from, to);
             RouteSegment segment = parseRouteJson(json, from, to);
 
             if (segment != null) {
                 segments.add(segment);
+                // 累加分段距离
+                totalDistance += segment.getDistance();
             }
         }
 
-        RoutePlanResponse response = new RoutePlanResponse();
         response.setVisitOrder(
                 points.stream().map(Point::getId).collect(Collectors.toList())
         );
         response.setRoutes(segments);
+        response.setTotalDistance(totalDistance);
 
         return response;
     }
@@ -87,34 +95,14 @@ public class RoutePlanServiceImpl implements RoutePlanService {
      */
     private String callGaoDeApi(Point from, Point to) {
         try {
-            // 1️⃣ 原始参数字符串（顺序非常重要）
-            String params =
-                    "origin=" + from.getLongitude() + "," + from.getLatitude() +
-                            "&destination=" + to.getLongitude() + "," + to.getLatitude() +
-                            "&extensions=base" +
-                            "&output=JSON" +
-                            "&key=" + GAODE_WEB_KEY;
-
-            // 2️⃣ 生成 sig：params + 安全 key → MD5
-            String sig = md5(params + GAODE_SECURITY_KEY);
-
-            // 3️⃣ 拼最终 URL
-            String url = "https://restapi.amap.com/v3/direction/driving?"
-                    + params + "&sig=" + sig;
-
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(url))
-                    .GET()
-                    .build();
-
-            HttpClient client = HttpClient.newHttpClient();
-            HttpResponse<String> response =
-                    client.send(request, HttpResponse.BodyHandlers.ofString());
-
-            return response.body();
-
+            return gaoDeApiService.getDrivingRoute(
+                    from.getLongitude(), from.getLatitude(),
+                    to.getLongitude(), to.getLatitude()
+            );
+        } catch (IllegalStateException e) {
+            throw e;
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.error("高德 API 调用失败: from={} to={}", from.getId(), to.getId(), e);
             return "{}";
         }
     }
@@ -136,21 +124,8 @@ public class RoutePlanServiceImpl implements RoutePlanService {
             return new RouteSegment(from.getId(), to.getId(), distance);
 
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.error("路线 JSON 解析失败: from={} to={}", from.getId(), to.getId(), e);
             return null;
         }
-    }
-
-    /**
-     * MD5 工具方法
-     */
-    private String md5(String text) throws Exception {
-        MessageDigest md = MessageDigest.getInstance("MD5");
-        byte[] digest = md.digest(text.getBytes("UTF-8"));
-        StringBuilder sb = new StringBuilder();
-        for (byte b : digest) {
-            sb.append(String.format("%02x", b & 0xff));
-        }
-        return sb.toString();
     }
 }

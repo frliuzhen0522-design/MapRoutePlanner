@@ -33,7 +33,7 @@ mybatis:
 server:
   port: 8080
 
-#  gaode:
-#    web-key: 	8cb054591f58e456f5ac66ff5d3a7e9d
-#    secret-key: ab9fbe2812ffcce65129168e9cbb249f
-
+gaode:
+  # 高德 API Key 与密钥（请在部署时替换）
+  web-key: your-web-key
+  secret-key: your-secret-key
