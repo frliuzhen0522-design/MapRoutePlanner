@@ -12,6 +12,10 @@ public class RouteAlgorithmServiceImpl implements RouteAlgorithmService {
     @Override
     public List<Point> planRoute(List<Point> targets) {
         List<Point> route = new ArrayList<>();
+        // 空列表直接返回，避免后续越界
+        if (targets == null || targets.isEmpty()) {
+            return route;
+        }
 
         for (int i = 0; i < targets.size() - 1; i++) {
             Point from = targets.get(i);
