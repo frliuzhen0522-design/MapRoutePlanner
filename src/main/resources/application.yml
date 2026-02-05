@@ -1,0 +1,39 @@
+# ===============================
+# Spring Boot 基础配置文件
+# ===============================
+
+spring:
+  datasource:
+    # 数据库连接地址
+    url: jdbc:mysql://localhost:3306/map_path_planning?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC
+
+    # 数据库用户名
+    username: root
+
+    # 数据库密码
+    password: 123456
+
+    # MySQL 驱动类（必须写，Spring Boot 4 很严格）
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+
+# ===============================
+# MyBatis 配置
+# ===============================
+mybatis:
+  # 实体类所在包（Point 等）
+  type-aliases-package: org.example.maprouteplanner.model
+
+  # Mapper XML 文件位置（暂时可以没有，但先写好）
+  mapper-locations: classpath:mapper/*.xml
+
+# ===============================
+# 服务器端口
+# ===============================
+server:
+  port: 8080
+
+#  gaode:
+#    web-key: 	8cb054591f58e456f5ac66ff5d3a7e9d
+#    secret-key: ab9fbe2812ffcce65129168e9cbb249f
+
