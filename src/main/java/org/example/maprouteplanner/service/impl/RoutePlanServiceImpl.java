@@ -2,20 +2,16 @@ package org.example.maprouteplanner.service.impl;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.example.maprouteplanner.config.GaodeConfig;
 import org.example.maprouteplanner.dto.RoutePlanRequest;
 import org.example.maprouteplanner.dto.RoutePlanResponse;
 import org.example.maprouteplanner.dto.RouteSegment;
 import org.example.maprouteplanner.mapper.PointMapper;
 import org.example.maprouteplanner.model.Point;
 import org.example.maprouteplanner.service.RoutePlanService;
-import org.example.maprouteplanner.utils.SignUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -27,11 +23,12 @@ import java.util.stream.Collectors;
 public class RoutePlanServiceImpl implements RoutePlanService {
 
     private final PointMapper pointMapper;
-    private final GaodeConfig gaodeConfig;
+    private final GaoDeApiService gaoDeApiService;
+    private static final Logger logger = LoggerFactory.getLogger(RoutePlanServiceImpl.class);
 
-    public RoutePlanServiceImpl(PointMapper pointMapper, GaodeConfig gaodeConfig) {
+    public RoutePlanServiceImpl(PointMapper pointMapper, GaoDeApiService gaoDeApiService) {
         this.pointMapper = pointMapper;
-        this.gaodeConfig = gaodeConfig;
+        this.gaoDeApiService = gaoDeApiService;
     }
 
     @Override
@@ -98,40 +95,14 @@ public class RoutePlanServiceImpl implements RoutePlanService {
      */
     private String callGaoDeApi(Point from, Point to) {
         try {
-            String webKey = gaodeConfig.getWebKey();
-            String secretKey = gaodeConfig.getSecretKey();
-            // 缺失配置时直接提示，便于定位
-            if (webKey == null || webKey.isBlank() || secretKey == null || secretKey.isBlank()) {
-                throw new IllegalStateException("高德配置缺失，请检查 gaode.web-key 与 gaode.secret-key");
-            }
-            // 1️⃣ 原始参数字符串（顺序非常重要）
-            String params =
-                    "origin=" + from.getLongitude() + "," + from.getLatitude() +
-                            "&destination=" + to.getLongitude() + "," + to.getLatitude() +
-                            "&extensions=base" +
-                            "&output=JSON" +
-                            "&key=" + webKey;
-
-            // 2️⃣ 生成 sig：params + 安全 key → MD5
-            String sig = SignUtils.md5(params + secretKey);
-
-            // 3️⃣ 拼最终 URL
-            String url = "https://restapi.amap.com/v3/direction/driving?"
-                    + params + "&sig=" + sig;
-
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(url))
-                    .GET()
-                    .build();
-
-            HttpClient client = HttpClient.newHttpClient();
-            HttpResponse<String> response =
-                    client.send(request, HttpResponse.BodyHandlers.ofString());
-
-            return response.body();
-
+            return gaoDeApiService.getDrivingRoute(
+                    from.getLongitude(), from.getLatitude(),
+                    to.getLongitude(), to.getLatitude()
+            );
+        } catch (IllegalStateException e) {
+            throw e;
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.error("高德 API 调用失败: from={} to={}", from.getId(), to.getId(), e);
             return "{}";
         }
     }
@@ -153,7 +124,7 @@ public class RoutePlanServiceImpl implements RoutePlanService {
             return new RouteSegment(from.getId(), to.getId(), distance);
 
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.error("路线 JSON 解析失败: from={} to={}", from.getId(), to.getId(), e);
             return null;
         }
     }
