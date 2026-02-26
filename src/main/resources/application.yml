@@ -6,25 +6,24 @@ spring:
   datasource:
     # 数据库连接地址
     url: jdbc:mysql://localhost:3306/map_path_planning?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC
-
     # 数据库用户名
-    username: root
-
+    username: ${DB_USERNAME:root}
     # 数据库密码
-    password: 123456
-
-    # MySQL 驱动类（必须写，Spring Boot 4 很严格）
+    password: ${DB_PASSWORD:123456}
+    # MySQL 驱动类
     driver-class-name: com.mysql.cj.jdbc.Driver
 
+  # 参数校验
+  jackson:
+    default-property-inclusion: non_null
 
 # ===============================
 # MyBatis 配置
 # ===============================
 mybatis:
-  # 实体类所在包（Point 等）
+  # 实体类所在包
   type-aliases-package: org.example.maprouteplanner.model
-
-  # Mapper XML 文件位置（暂时可以没有，但先写好）
+  # Mapper XML 文件位置
   mapper-locations: classpath:mapper/*.xml
 
 # ===============================
@@ -33,7 +32,20 @@ mybatis:
 server:
   port: 8080
 
+# ===============================
+# 高德地图配置
+# ===============================
 gaode:
-  # 高德 API Key 与密钥（请在部署时替换）
-  web-key: 8cb054591f58e456f5ac66ff5d3a7e9d
-  secret-key: ab9fbe2812ffcce65129168e9cbb249f
+  # 建议使用环境变量配置
+  web-key: ${GAODE_WEB_KEY:8cb054591f58e456f5ac66ff5d3a7e9d}
+  secret-key: ${GAODE_SECRET_KEY:ab9fbe2812ffcce65129168e9cbb249f}
+
+# ===============================
+# 日志配置
+# ===============================
+logging:
+  level:
+    org.example.maprouteplanner: DEBUG
+    org.springframework.web: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
