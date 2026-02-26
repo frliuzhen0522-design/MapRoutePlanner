@@ -7,8 +7,10 @@ import org.example.maprouteplanner.dto.RoutePlanResponse;
 import org.example.maprouteplanner.dto.RouteSegment;
 import org.example.maprouteplanner.mapper.PointMapper;
 import org.example.maprouteplanner.model.Point;
+import org.example.maprouteplanner.service.RouteAlgorithmService;
 import org.example.maprouteplanner.service.RoutePlanService;
 import org.example.maprouteplanner.utils.SignUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -55,42 +57,49 @@ public class RoutePlanServiceImpl implements RoutePlanService {
     /**
      * 核心路线计算（暂时按顺序）
      */
-    public RoutePlanResponse planRoute(List<Point> points) {
+    @Autowired
+    private RouteAlgorithmService routeAlgorithmService;
 
+    public RoutePlanResponse planRoute(List<Point> points) {
         RoutePlanResponse response = new RoutePlanResponse();
-        // 空输入直接返回，避免空指针或越界
+
+        // 空输入直接返回
         if (points == null || points.size() < 2) {
             response.setVisitOrder(List.of());
             response.setRoutes(List.of());
             response.setTotalDistance(0);
             return response;
         }
-        List<RouteSegment> segments = new ArrayList<>();
-        int totalDistance = 0; // 累计总距离（米）
-        for (int i = 0; i < points.size() - 1; i++) {
-            Point from = points.get(i);
-            Point to = points.get(i + 1);
 
-            // 调用高德 API 获取路线信息
+        // 使用优化算法重新排序点
+        List<Point> optimizedPoints = routeAlgorithmService.planRoute(points);
+
+        List<RouteSegment> segments = new ArrayList<>();
+        int totalDistance = 0;
+
+        for (int i = 0; i < optimizedPoints.size() - 1; i++) {
+            Point from = optimizedPoints.get(i);
+            Point to = optimizedPoints.get(i + 1);
+
+            // 调用高德 API 获取实际路线信息
             String json = callGaoDeApi(from, to);
             RouteSegment segment = parseRouteJson(json, from, to);
 
             if (segment != null) {
                 segments.add(segment);
-                // 累加分段距离
                 totalDistance += segment.getDistance();
             }
         }
 
-
         response.setVisitOrder(
-                points.stream().map(Point::getId).collect(Collectors.toList())
+                optimizedPoints.stream().map(Point::getId).collect(Collectors.toList())
         );
         response.setRoutes(segments);
         response.setTotalDistance(totalDistance);
 
         return response;
     }
+
 
     /**
      * ✅ 正确调用高德 Web API（带 sig）
